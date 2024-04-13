@@ -1,7 +1,8 @@
 from pathlib import Path, PurePath, PurePosixPath
 
 import pysftp
-import datetime
+from datetime import datetime, date, timedelta
+
 from config import Config
 from cryptography.fernet import Fernet
 
@@ -10,7 +11,7 @@ def getDirectories(rootDirectories):
     tempDirectoryList = []
     for item in rootDirectories:
         try:
-            datetime.date.fromisoformat(item)
+            date.fromisoformat(item)
             tempDirectoryList.append(item)
         except ValueError:
             print(item, ": not a date directory.")
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     motionEyeFtp = pysftp.Connection(host=Config.motionEyeIpAddress, username=Config.motionEyeFtpUsername,
                                      password=Config.motionEyeFtpPassword, cnopts=cnopts)
     motionEyeFtp.cwd(Config.motionEyeLocalFtpFilePath)
-
+    print("Current Date:", datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S %Z"))
     # get motionEye daily directories
     print("getting Motioneye directory and filenames.")
     motionEyeDirectoriesAndFiles = getDirectoriesAndFiles(motionEyeFtp, Config.motionEyeLocalFtpFilePath,
@@ -96,7 +97,7 @@ if __name__ == '__main__':
                          localpath=localFullFileName)
 
     # upload directories and files to aws
-    print("Uploading files to AWS SFTP.")
+    print("Uploading files to AWS SFTP...", end=" ")
     for directory, filename in filesToTransport:
 
         currentLocalFullDirectoryPath = PurePosixPath(Config.temporaryServerFilePath).joinpath(directory).__str__()
@@ -116,17 +117,17 @@ if __name__ == '__main__':
         awssftp.put(localpath=localFullFileName,
                     remotepath=filename)
     print("done.")
-    print(f"deleting videos older than {Config.deleteAfterDays} days.")
-    dateThreshold = (datetime.datetime.today() - datetime.timedelta(days=Config.deleteAfterDays)).date()
+    print(f"deleting videos older than {Config.deleteAfterDays} days...", end=" ")
+    dateThreshold = (datetime.today() - timedelta(days=Config.deleteAfterDays)).date()
 
     awssftp.cwd(Config.awsRootDirectory)
     currentDateDirectories = getDirectories(awssftp.listdir())
     date_format = '%Y-%m-%d'
 
     for folder in currentDateDirectories:
-        dateInQuestion = datetime.datetime.strptime(folder, date_format).date()
+        dateInQuestion = datetime.strptime(folder, date_format).date()
         if dateInQuestion < dateThreshold:
-            print(f"removing all videos from{dateInQuestion.__str__()}")
+            print(f"removing all videos from{dateInQuestion.__str__()}...", end=" ")
             awssftp.execute(f"rm -rf {Config.awsRootDirectory}/{dateInQuestion.__str__()}")
     print("done.")
     awssftp.close()
